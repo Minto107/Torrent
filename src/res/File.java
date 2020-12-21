@@ -3,12 +3,10 @@ package res;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class File {
     public String name, md5, fileLocation;
@@ -18,11 +16,22 @@ public class File {
         this.fileLocation = fileLocation;
         md5 = generateMD5(fileLocation);
     }
+
     public File(String name, String md5, String fileLocation){
         this.name = name;
         this.md5 = md5;
         this.fileLocation = fileLocation;
     }
+
+    public File(String fileLocation) {
+        this.fileLocation = fileLocation;
+        md5 = generateMD5(fileLocation);
+        Pattern pattern = Pattern.compile("[\\\\]{0}[\\w-.]*$");
+        Matcher matcher = pattern.matcher(fileLocation);
+        matcher.find();
+        name = matcher.group(0);
+    }
+
     String generateMD5(String fileLocation){
         try {
             FileInputStream fis = new FileInputStream(fileLocation);
@@ -57,15 +66,7 @@ public class File {
 
     @Override
     public String toString() {
-        return "File{" +
-                "name='" + name + '\'' +
-                ", md5='" + md5 + '\'' +
-                ", fileLocation='" + fileLocation + '\'' +
-                '}';
+        return  "name=" + name + ", md5=" + md5 + ", fileLocation=" + fileLocation;
     }
 
-    public static void main(String[] args) {
-        File f = new File("test", "C:\\Users\\minto.MSI-B450TM\\Downloads\\GPU-Z.2.36.0.exe");
-        System.out.println(f.toString());
-    }
 }
