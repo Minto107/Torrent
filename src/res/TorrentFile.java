@@ -8,22 +8,22 @@ import java.security.NoSuchAlgorithmException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class File {
+public class TorrentFile {
     public String name, md5, fileLocation;
 
-    public File (String name, String fileLocation){
+    public TorrentFile(String name, String fileLocation){
         this.name = name;
         this.fileLocation = fileLocation;
         md5 = generateMD5(fileLocation);
     }
 
-    public File(String name, String md5, String fileLocation){
+    public TorrentFile(String name, String md5, String fileLocation){
         this.name = name;
         this.md5 = md5;
         this.fileLocation = fileLocation;
     }
 
-    public File(String fileLocation) {
+    public TorrentFile(String fileLocation) {
         this.fileLocation = fileLocation;
         md5 = generateMD5(fileLocation);
         Pattern pattern = Pattern.compile("[\\\\]{0}[\\w-.]*$");
@@ -69,4 +69,15 @@ public class File {
         return  "name=" + name + ", md5=" + md5 + ", fileLocation=" + fileLocation;
     }
 
+    public String getName() {
+        return name;
+    }
+
+    public String getMd5() {
+        return md5;
+    }
+
+    public String getFileLocation() {
+        return fileLocation;
+    }
 }
