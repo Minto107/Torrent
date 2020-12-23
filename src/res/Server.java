@@ -31,6 +31,7 @@ public class Server {
                 if (userInput != null) {
                     System.out.println(userInput);
                     sendName(Integer.parseInt(userInput));
+                    sendFileListToClient();
                     }
             }
         } catch (IOException e) {
@@ -62,6 +63,8 @@ public class Server {
         OutputStream os = nameS.getOutputStream();
         os.write(torrentFiles.get(index).name.getBytes());
         os.close();
+        nameSocket.close();
+        nameS.close();
         sendFileNew(index+1);
     }
 
@@ -83,6 +86,7 @@ public class Server {
         byte[] contents;
         long fileLength = file.length();
         long current = 0;
+        System.out.println("Sending file ... ");
         while(current!=fileLength){
             int size = 10000;
             if(fileLength - current >= size)
@@ -94,7 +98,7 @@ public class Server {
             contents = new byte[size];
             bis.read(contents, 0, size);
             os.write(contents);
-            System.out.print("Sending file ... "+(current*100)/fileLength+"% complete!");
+            //System.out.print((current*100)/fileLength+"% ");
         }
 
         os.flush();

@@ -31,16 +31,13 @@ public class Client {
                     exit = true;
                     client.close();
                 } else if (isInteger(choice)) {
-                    StringBuilder sb = new StringBuilder(choice);
-                    sb.append('\n');
-                    printWriter.write(sb.toString());
+                    printWriter.write(choice + '\n');
+                    System.out.println("Sending choice...");
                     printWriter.flush();
+                    System.out.println("Sent!");
                     String name = receiveName();
+                    System.out.println("Received name");
                     receiveFile(name);
-                    //InputStream is = client.getInputStream();
-                    //FileOutputStream fos = new FileOutputStream("D:\\Torrent\\test.cpp");
-                    //fos.write(receive, 0, receive.length);
-                    //receiveFile("D:\\Torrent\\test.cpp");
                 } else {
                     System.out.println("That's not what we wanted to see");
                 }
@@ -55,39 +52,18 @@ public class Client {
             try {
                 String userInput;
                 int counter = 0;
-                while (((userInput = bf.readLine()) != null)) {
+                while (true) {
                     if (!readMode){
                         if (counter==0) {
                             //this.writer = new PrintWriter("D:\\Torrent\\test.cpp");
                             System.out.println("Reading will stop");
                             counter++;
                         }
-                        /*    writer.write(userInput + '\n');
-                            writer.flush();
-
-                        System.out.println(userInput);*//*
-                        byte[] contents = new byte[10000];
-
-                        //Initialize the FileOutputStream to the output file's full path.
-                        FileOutputStream fos = new FileOutputStream("D:\\Torrent\\test.cpp");
-                        BufferedOutputStream bos = new BufferedOutputStream(fos);
-                        InputStream is = client.getInputStream();
-
-                        //No of bytes read in one read() call
-                        int bytesRead = 0;
-
-                        while((bytesRead=is.read(contents))!=-1)
-                            bos.write(contents, 0, bytesRead);
-
-                        bos.flush();
-                        client.close();
-
-                        System.out.println("File saved successfully!");*/
                     } else {
+                        userInput = bf.readLine();
                         System.out.println(userInput);
                         System.out.println(bf.readLine());
                     }
-
                 }
             } catch (IOException ioException) {
                 ioException.printStackTrace();
@@ -95,26 +71,16 @@ public class Client {
         });
         thread.start();
     }
-
-    /*private void receiveFile(String fileLocation) {
-        try {
-            InputStream is = client.getInputStream();
-            FileOutputStream fos = new FileOutputStream(fileLocation);
-            byte[] receive = new byte[2002];
-            is.read(receive, 0, receive.length);
-            fos.write(receive, 0, receive.length);
-        } catch (IOException ioException) {
-            ioException.printStackTrace();
-        }
-
-    }*/
-
     private String receiveName() throws IOException {
+        System.out.println("Creating socket...");
         Socket socket = new Socket(InetAddress.getByName("localhost"), 5001);
+        System.out.println("Socket created!");
         BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        System.out.println("Reading name...");
         String name = reader.readLine();
         System.out.println(name);
         reader.close();
+        socket.close();
         return name;
     }
 
@@ -130,15 +96,16 @@ public class Client {
         InputStream is = socket.getInputStream();
 
         //No of bytes read in one read() call
-        int bytesRead = 0;
+        int reading = 0;
 
-        while((bytesRead=is.read(contents))!=-1)
-            bos.write(contents, 0, bytesRead);
+        while((reading=is.read(contents))!=-1)
+            bos.write(contents, 0, reading);
 
         bos.flush();
         socket.close();
 
         System.out.println("File saved successfully!");
+        readMode = true;
     }
 
     public static void main(String[] args) {
