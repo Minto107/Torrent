@@ -12,6 +12,7 @@ public class Client {
     Socket client;
     boolean readMode;
     BufferedReader bf;
+    static boolean multiHostMode;
 
     public Client(int port) {
         try {
@@ -41,9 +42,9 @@ public class Client {
                     String name = receiveName();
                     System.out.println("Received name");
                     receiveFile(name);
-                } else if(match){
+                } else if (match) {
                     System.out.println("Sending file... ");
-                    printWriter.write(choice+'\n');
+                    printWriter.write(choice + '\n');
                     printWriter.flush();
                     sendName(choice);
                 } else {
@@ -56,13 +57,14 @@ public class Client {
     }
 
     private void readFromServer() {
-        Thread thread = new Thread(()->{
+        System.out.println("Connected to a file server at " + client.getPort());
+        Thread thread = new Thread(() -> {
             try {
                 String userInput;
                 int counter = 0;
                 while (true) {
-                    if (!readMode){
-                        if (counter==0) {
+                    if (!readMode) {
+                        if (counter == 0) {
                             //this.writer = new PrintWriter("D:\\Torrent\\test.cpp");
                             System.out.println("Reading will stop");
                             counter++;
@@ -79,6 +81,7 @@ public class Client {
         });
         thread.start();
     }
+
     private String receiveName() throws IOException {
         System.out.println("Creating socket...");
         Socket socket = new Socket(InetAddress.getByName("localhost"), 5001);
@@ -100,7 +103,7 @@ public class Client {
         BufferedOutputStream bos = new BufferedOutputStream(fos);
         InputStream is = socket.getInputStream();
         int reading;
-        while((reading=is.read(file))!=-1)
+        while ((reading = is.read(file)) != -1)
             bos.write(file, 0, reading);
         bos.flush();
         socket.close();
@@ -131,31 +134,35 @@ public class Client {
         System.out.println("Waiting for connection...");
         Socket socket = ssDL.accept();
         File file = new File(filePath);
-        FileInputStream fis = new FileInputStream(file);
-        BufferedInputStream bis = new BufferedInputStream(fis);
-        OutputStream os = socket.getOutputStream();
-        byte[] contents;
-        long fileLength = file.length();
-        long current = 0;
-        System.out.println("Sending file ... ");
-        while(current!=fileLength){
-            int size = 10000;
-            if(fileLength - current >= size)
-                current += size;
-            else{
-                size = (int)(fileLength - current);
-                current = fileLength;
+        if (file.exists()){
+            FileInputStream fis = new FileInputStream(file);
+            BufferedInputStream bis = new BufferedInputStream(fis);
+            OutputStream os = socket.getOutputStream();
+            byte[] contents;
+            long fileLength = file.length();
+            long current = 0;
+            System.out.println("Sending file ... ");
+            while (current != fileLength) {
+                int size = 10000;
+                if (fileLength - current >= size)
+                    current += size;
+                else {
+                    size = (int) (fileLength - current);
+                    current = fileLength;
+                }
+                contents = new byte[size];
+                bis.read(contents, 0, size);
+                os.write(contents);
             }
-            contents = new byte[size];
-            bis.read(contents, 0, size);
-            os.write(contents);
-            //System.out.print((current*100)/fileLength+"% ");
+            os.flush();
+            socket.close();
+            ssDL.close();
+            System.out.println("File sent successfully!");
+        } else {
+            System.err.println(filePath + " doesn't exists.");
+            socket.close();
+            ssDL.close();
         }
-        os.flush();
-        //File transfer done. Close the socket connection!
-        socket.close();
-        ssDL.close();
-        System.out.println("File sent succesfully!");
     }
 
     public static boolean isInteger(String s) {
@@ -183,6 +190,8 @@ public class Client {
     }
 
     public static void main(String[] args) {
+        /*if (args[0].equals("-MH"))
+            multiHostMode = true;*/
         new Client(44431);
     }
 }
