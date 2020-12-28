@@ -11,6 +11,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 
 public class Server {
     List<TorrentFile> torrentFiles;
@@ -18,15 +19,14 @@ public class Server {
     Socket server;
     BufferedReader reader;
     boolean firstRun;
+    static boolean multiHostMode;
 
     public Server(int port) {
         try {
+            readFilesFromDirectory();
             firstRun = true;
             ss = new ServerSocket(port);
             log("Server listening on port " + ss.getLocalPort());
-            torrentFiles = new ArrayList<>();
-            torrentFiles.add(new TorrentFile("C:\\Users\\minto.MSI-B450TM\\Downloads\\GPU-Z.2.36.0.exe"));
-            torrentFiles.add(new TorrentFile("C:\\Users\\minto.MSI-B450TM\\Downloads\\main.cpp"));
             retrieveFiles();
             log("Waiting for clients to connect...");
             server = ss.accept();
@@ -35,7 +35,6 @@ public class Server {
             while (true) {
                 reader = new BufferedReader(new InputStreamReader(server.getInputStream()));
                 String userInput = reader.readLine();
-                //System.out.println(userInput);
                 if (userInput != null) {
                     if (isInteger(userInput)) {
                         sendName(Integer.parseInt(userInput));
@@ -46,7 +45,7 @@ public class Server {
                         receiveFile(name);
                     }
                     sendFileListToClient();
-                    }
+                }
             }
         } catch (IOException e) {
             log("Server is closing...");
@@ -54,7 +53,7 @@ public class Server {
     }
 
     private void sendName(int index) throws IOException {
-        index -=1;
+        index -= 1;
         ServerSocket nameSocket = new ServerSocket(5001);
         Socket nameS = nameSocket.accept();
         OutputStream os = nameS.getOutputStream();
@@ -62,7 +61,7 @@ public class Server {
         os.close();
         nameSocket.close();
         nameS.close();
-        sendFile(index+1);
+        sendFile(index + 1);
     }
 
     private void sendFile(int index) throws IOException {
@@ -73,31 +72,24 @@ public class Server {
         File file = new File(torrentFiles.get(index).fileLocation);
         FileInputStream fis = new FileInputStream(file);
         BufferedInputStream bis = new BufferedInputStream(fis);
-
-        //Get socket's output stream
         OutputStream os = socket.getOutputStream();
-
-        //Read File Contents into contents array
         byte[] contents;
         long fileLength = file.length();
         long current = 0;
         log("Sending file ... ");
-        while(current!=fileLength){
+        while (current != fileLength) {
             int size = 10000;
-            if(fileLength - current >= size)
+            if (fileLength - current >= size)
                 current += size;
-            else{
-                size = (int)(fileLength - current);
+            else {
+                size = (int) (fileLength - current);
                 current = fileLength;
             }
             contents = new byte[size];
             bis.read(contents, 0, size);
             os.write(contents);
-            //System.out.print((current*100)/fileLength+"% ");
         }
-
         os.flush();
-        //File transfer done. Close the socket connection!
         socket.close();
         ssDL.close();
         log("File sent succesfully!");
@@ -124,7 +116,7 @@ public class Server {
         BufferedOutputStream bos = new BufferedOutputStream(fos);
         InputStream is = socket.getInputStream();
         int reading;
-        while((reading=is.read(file))!=-1)
+        while ((reading = is.read(file)) != -1)
             bos.write(file, 0, reading);
         bos.flush();
         socket.close();
@@ -157,11 +149,11 @@ public class Server {
         }
     }
 
-    private void log(String s){
+    private void log(String s) {
         try {
-            if (firstRun){
+            if (firstRun) {
                 PrintWriter writer = new PrintWriter("log.txt");
-                SimpleDateFormat formatter= new SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss z");
+                SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss z");
                 Date date = new Date(System.currentTimeMillis());
                 writer.write("Logging started on " + formatter.format(date) + '\n');
                 writer.flush();
@@ -174,6 +166,15 @@ public class Server {
             System.out.println("LOG: " + s);
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private void readFilesFromDirectory() {
+        torrentFiles = new ArrayList<>();
+        String homeLocation = "D:\\TorrentS";
+        File actual = new File("D:\\TorrentS");
+        for (File f : Objects.requireNonNull(actual.listFiles())) {
+            torrentFiles.add(new TorrentFile(homeLocation + "\\" + f.getName()));
         }
     }
 
@@ -202,6 +203,8 @@ public class Server {
     }
 
     public static void main(String[] args) {
+        /*if (args[0].equals("-MH"))
+            multiHostMode = true;*/
         new Server(44431);
     }
 }
