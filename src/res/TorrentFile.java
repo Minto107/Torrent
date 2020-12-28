@@ -66,18 +66,7 @@ public class TorrentFile {
 
     @Override
     public String toString() {
-        return  "name=" + name + ", md5=" + md5 + ", fileLocation=" + fileLocation;
+        return  "File name = " + name + ", md5 = " + md5 + ", file location = " + fileLocation;
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public String getMd5() {
-        return md5;
-    }
-
-    public String getFileLocation() {
-        return fileLocation;
-    }
 }
