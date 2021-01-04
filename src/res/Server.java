@@ -13,27 +13,32 @@ import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Server class is used to create a file server
+ */
 public class Server {
-    List<TorrentFile> torrentFiles;
-    ServerSocket ss;
-    Socket server;
-    BufferedReader reader;
-    boolean firstRun;
-    static boolean multiHostMode;
+    private List<TorrentFile> torrentFiles;
+    private Socket server;
+    private boolean firstRun;
+    private static boolean multiHostMode;
 
+    /**
+     * Creates new Server object
+     * @param port Enter port that you want the server to run on
+     */
     public Server(int port) {
         try {
-            readFilesFromDirectory();
             firstRun = true;
-            ss = new ServerSocket(port);
+            ServerSocket ss = new ServerSocket(port);
             log("Server listening on port " + ss.getLocalPort());
+            readFilesFromDirectory();
             retrieveFiles();
             log("Waiting for clients to connect...");
             server = ss.accept();
             log("Client connected!");
             sendFileListToClient();
             while (true) {
-                reader = new BufferedReader(new InputStreamReader(server.getInputStream()));
+                BufferedReader reader = new BufferedReader(new InputStreamReader(server.getInputStream()));
                 String userInput = reader.readLine();
                 if (userInput != null) {
                     if (isInteger(userInput)) {
@@ -52,6 +57,11 @@ public class Server {
         }
     }
 
+    /**
+     * Sends name of the file to the client so it can download the file and use it's correct name and extension.
+     * @param index File number provided from client.
+     * @throws IOException if an I/O error occurs when opening the socket.
+     */
     private void sendName(int index) throws IOException {
         index -= 1;
         ServerSocket nameSocket = new ServerSocket(5001);
@@ -64,6 +74,11 @@ public class Server {
         sendFile(index + 1);
     }
 
+    /**
+     * Sends the desired file to the client.
+     * @param index File number provided from client.
+     * @throws IOException if an I/O error occurs when opening the socket.
+     */
     private void sendFile(int index) throws IOException {
         ServerSocket ssDL = new ServerSocket(5000);
         log("Waiting for connection...");
@@ -95,6 +110,11 @@ public class Server {
         log("File sent succesfully!");
     }
 
+    /**
+     * Receives the file name from the client.
+     * @return Returns file name received from the client.
+     * @throws IOException if an I/O error occurs when opening the socket.
+     */
     private String receiveName() throws IOException {
         System.out.println("Creating socket...");
         Socket socket = new Socket(InetAddress.getByName("localhost"), 5001);
@@ -108,6 +128,11 @@ public class Server {
         return name;
     }
 
+    /**
+     * Receives file from the client.
+     * @param name Name of file received from the client that will be used to save it as on the server.
+     * @throws IOException if an I/O error occurs when opening the socket.
+     */
     private void receiveFile(String name) throws IOException {
         Socket socket = new Socket(InetAddress.getByName("localhost"), 5000);
         byte[] file = new byte[10000];
@@ -124,6 +149,9 @@ public class Server {
         log("File " + name + " saved to " + filePath);
     }
 
+    /**
+     * Prints details about files that are stored on the file server.
+     */
     private void retrieveFiles() {
         System.out.println("There are " + torrentFiles.size() + " files on the server." +
                 "\nFull list:");
@@ -132,6 +160,9 @@ public class Server {
         }
     }
 
+    /**
+     * Sends file list to the connected client(s).
+     */
     private void sendFileListToClient() {
         try {
             StringBuilder output = new StringBuilder();
@@ -149,6 +180,10 @@ public class Server {
         }
     }
 
+    /**
+     * Provides basic logging functionality
+     * @param s String to save to the log and display on the console.
+     */
     private void log(String s) {
         try {
             if (firstRun) {
@@ -169,16 +204,26 @@ public class Server {
         }
     }
 
+    /**
+     * Reads file to the array from default location.
+     */
     private void readFilesFromDirectory() {
+        log("Preparing file list...");
         torrentFiles = new ArrayList<>();
         String homeLocation = "D:\\TorrentS";
         File actual = new File("D:\\TorrentS");
         for (File f : Objects.requireNonNull(actual.listFiles())) {
             torrentFiles.add(new TorrentFile(homeLocation + "\\" + f.getName()));
         }
+        log("File list is ready.");
     }
 
-    public static boolean isInteger(String s) {
+    /**
+     * Checks if received line from client is an Integer.
+     * @param s String to check if is an Integer.
+     * @return Returns whether provided String is an Integer.
+     */
+    private static boolean isInteger(String s) {
         if (s == null) {
             return false;
         }
@@ -202,9 +247,13 @@ public class Server {
         return true;
     }
 
+    /**
+     * Runs the server.
+     * @param args You can provide additional parameter (-MH) to run server in multihost mode.
+     */
     public static void main(String[] args) {
-        /*if (args[0].equals("-MH"))
-            multiHostMode = true;*/
+        if (args != null || args[0].equals("-MH"))
+            multiHostMode = true;
         new Server(44431);
     }
 }

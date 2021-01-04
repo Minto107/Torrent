@@ -8,12 +8,19 @@ import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Client class creates a client that connects to desired server on the same computer(localhost).
+ */
 public class Client {
-    Socket client;
-    boolean readMode;
-    BufferedReader bf;
-    static boolean multiHostMode;
+    private Socket client;
+    private boolean readMode;
+    private BufferedReader bf;
+    private static boolean multiHostMode;
 
+    /**
+     * Creates Client object and connects with a file server.
+     * @param port Port number that client will try to connect to.
+     */
     public Client(int port) {
         try {
             boolean exit = false;
@@ -56,6 +63,9 @@ public class Client {
         }
     }
 
+    /**
+     * Starts new thread that will read any messages that are being sent from the server.
+     */
     private void readFromServer() {
         System.out.println("Connected to a file server at " + client.getPort());
         Thread thread = new Thread(() -> {
@@ -65,7 +75,6 @@ public class Client {
                 while (true) {
                     if (!readMode) {
                         if (counter == 0) {
-                            //this.writer = new PrintWriter("D:\\Torrent\\test.cpp");
                             System.out.println("Reading will stop");
                             counter++;
                         }
@@ -82,6 +91,11 @@ public class Client {
         thread.start();
     }
 
+    /**
+     * Receives file name that will be later used to create and store a file.
+     * @return Returns String containing file name that will be used to store a file.
+     * @throws IOException if an I/O error occurs when opening the socket.
+     */
     private String receiveName() throws IOException {
         System.out.println("Creating socket...");
         Socket socket = new Socket(InetAddress.getByName("localhost"), 5001);
@@ -95,6 +109,11 @@ public class Client {
         return name;
     }
 
+    /**
+     * Receives the file from the server.
+     * @param name String that will be used as file name to store it in download location.
+     * @throws IOException if an I/O error occurs when opening the socket.
+     */
     private void receiveFile(String name) throws IOException {
         Socket socket = new Socket(InetAddress.getByName("localhost"), 5000);
         byte[] file = new byte[10000];
@@ -112,23 +131,33 @@ public class Client {
         readMode = true;
     }
 
+    /**
+     * Sends the file name to the server.
+     * @param filePath String containing path to the file that's name will be sent to the file server.
+     * @throws IOException if an I/O error occurs when opening the socket.
+     */
     private void sendName(String filePath) throws IOException {
         ServerSocket nameSocket = new ServerSocket(5001);
         Pattern pattern = Pattern.compile("[\\\\]{0}[\\w-.]*$");
         Matcher matcher = pattern.matcher(filePath);
         matcher.find();
         String name = matcher.group(0);
-        Socket nameS = nameSocket.accept();
+        Socket nameSoc = nameSocket.accept();
         System.out.println("Connected!");
-        OutputStream os = nameS.getOutputStream();
+        OutputStream os = nameSoc.getOutputStream();
         os.write(name.getBytes());
         os.close();
         nameSocket.close();
-        nameS.close();
+        nameSoc.close();
         System.out.println("Name was sent!");
         sendFile(filePath);
     }
 
+    /**
+     * Sends file to the server.
+     * @param filePath String containing path to the file that will be sent to the file server.
+     * @throws IOException if an I/O error occurs when opening the socket.
+     */
     private void sendFile(String filePath) throws IOException {
         ServerSocket ssDL = new ServerSocket(5000);
         System.out.println("Waiting for connection...");
@@ -165,7 +194,12 @@ public class Client {
         }
     }
 
-    public static boolean isInteger(String s) {
+    /**
+     * Checks if received line from client is an Integer.
+     * @param s String to check if is an Integer.
+     * @return Returns whether provided String is an Integer.
+     */
+    private static boolean isInteger(String s) {
         if (s == null) {
             return false;
         }
@@ -189,9 +223,13 @@ public class Client {
         return true;
     }
 
+    /**
+     * Runs the client.
+     * @param args You can provide additional parameter (-MH) to run client in multihost mode.
+     */
     public static void main(String[] args) {
-        /*if (args[0].equals("-MH"))
-            multiHostMode = true;*/
+        if (args != null || args[0].equals("-MH"))
+            multiHostMode = true;
         new Client(44431);
     }
 }
