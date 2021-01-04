@@ -77,7 +77,7 @@ public class Client {
     }
 
     private void readClientID() throws IOException {
-        Socket receive = new Socket(InetAddress.getByName("localhost"), 5010);
+        Socket receive = new Socket(InetAddress.getByName("localhost"), 10001);
         BufferedReader reader = new BufferedReader(new InputStreamReader(receive.getInputStream()));
         clientID = Integer.parseInt(reader.readLine());
         reader.close();
@@ -97,7 +97,7 @@ public class Client {
     private void readFromServer() {
         if (!run)
             System.out.println("Connected to a file server at " + client.getPort());
-        Thread thread = new Thread(() -> {
+        new Thread(() -> {
             try {
                 String userInput;
                 int counter = 0;
@@ -117,8 +117,7 @@ public class Client {
                 if (!exit)
                     ioException.printStackTrace();
             }
-        });
-        thread.start();
+        }).start();
     }
 
     /**
@@ -128,7 +127,8 @@ public class Client {
      */
     private String receiveName() throws IOException {
         System.out.println("Creating socket...");
-        Socket socket = new Socket(InetAddress.getByName("localhost"), 5001);
+        int port = 5001 + (clientID * 10);
+        Socket socket = new Socket(InetAddress.getByName("localhost"), port);
         System.out.println("Socket created!");
         BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         System.out.println("Reading name...");
@@ -145,7 +145,9 @@ public class Client {
      * @throws IOException if an I/O error occurs when opening the socket.
      */
     private void receiveFile(String name) throws IOException {
-        Socket socket = new Socket(InetAddress.getByName("localhost"), 5000);
+        int port = 5000 + (clientID * 10);
+        Socket socket = new Socket(InetAddress.getByName("localhost"), port);
+        System.out.println("Listening on port " + socket.getPort());
         byte[] file = new byte[10000];
         String filePath = saveLocation + "\\" + name;
         FileOutputStream fos = new FileOutputStream(filePath);
@@ -168,7 +170,8 @@ public class Client {
      * @throws IOException if an I/O error occurs when opening the socket.
      */
     private void sendName(String filePath) throws IOException {
-        ServerSocket nameSocket = new ServerSocket(5001);
+        int port = 5001 + (clientID * 10);
+        ServerSocket nameSocket = new ServerSocket(port);
         Pattern pattern = Pattern.compile("[\\\\]{0}[\\w-.]*$");
         Matcher matcher = pattern.matcher(filePath);
         matcher.find();
@@ -190,11 +193,12 @@ public class Client {
      * @throws IOException if an I/O error occurs when opening the socket.
      */
     private void sendFile(String filePath) throws IOException {
-        ServerSocket ssDL = new ServerSocket(5000);
+        int port = 5000 + (clientID * 10);
+        ServerSocket ssDL = new ServerSocket(port);
         System.out.println("Waiting for connection...");
         Socket socket = ssDL.accept();
         File file = new File(filePath);
-        if (file.exists()){
+        if (file.exists()) {
             FileInputStream fis = new FileInputStream(file);
             BufferedInputStream bis = new BufferedInputStream(fis);
             OutputStream os = socket.getOutputStream();

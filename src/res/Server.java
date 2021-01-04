@@ -32,29 +32,15 @@ public class Server {
         try {
             firstRun = true;
             ServerSocket ss = new ServerSocket(port);
+            if (multiHostMode)
+                log("EXPERIMENTAL: Running server in Multihost mode!");
             log("Server listening on port " + ss.getLocalPort());
             readFilesFromDirectory();
-            retrieveFiles();
+            showFileList();
             log("Waiting for clients to connect...");
-            /*server = ss.accept();
-            handleClient(ss.accept());
-            log("Client " + clientID + " connected!");
-            sendFileListToClient();*/
             while (true) {
                 handleClient(ss.accept());
                 log("Client " + clientID + " connected!");
-                /*BufferedReader reader = new BufferedReader(new InputStreamReader(server.getInputStream()));
-                String userInput = reader.readLine();
-                if (userInput != null) {
-                    if (isInteger(userInput)) {
-                        sendName(Integer.parseInt(userInput));
-                    } else {
-                        String name = receiveName();
-                        System.out.println(name);
-                        receiveFile(name);
-                    }
-                    //sendFileListToClient();
-                }*/
             }
         } catch (IOException e) {
             log("Server is closing...");
@@ -63,26 +49,27 @@ public class Server {
 
     private void handleClient(Socket socket) {
         clientID++;
+        int myID = clientID;
         AtomicBoolean alive = new AtomicBoolean(true);
-        log("Creating handler for client " + clientID);
+        log("Creating handler for client " + myID);
         new Thread(() -> {
             try {
-                sendClientID();
+                sendClientID(myID);
                 BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 sendFileListToClient(socket);
                 String userInput = reader.readLine();
                 if (userInput != null) {
                     if (isInteger(userInput)) {
-                        sendName(Integer.parseInt(userInput));
+                        sendName(Integer.parseInt(userInput), myID);
                     } else if (userInput.equals("e")) {
                         alive.set(false);
                         reader.close();
                         socket.close();
-                        log("Client " + clientID + " disconnected.");
+                        log("Client " + myID + " disconnected.");
                     } else {
-                        String name = receiveName();
+                        String name = receiveName(myID);
                         System.out.println(name);
-                        receiveFile(name);
+                        receiveFile(name, myID);
                     }
                     if (alive.get())
                         sendFileListToClient(socket);
@@ -93,8 +80,8 @@ public class Server {
         }).start();
     }
 
-    private void sendClientID() throws IOException {
-        ServerSocket serverSocket = new ServerSocket(5010);
+    private void sendClientID(int clientID) throws IOException {
+        ServerSocket serverSocket = new ServerSocket(10001);
         Socket send = serverSocket.accept();
         OutputStream os = send.getOutputStream();
         os.write(String.valueOf(clientID).getBytes());
@@ -109,16 +96,17 @@ public class Server {
      * @param index File number provided from client.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
-    private void sendName(int index) throws IOException {
+    private void sendName(int index, int clientID) throws IOException {
         index -= 1;
-        ServerSocket nameSocket = new ServerSocket(5001);
+        int port = 5001 + (clientID * 10);
+        ServerSocket nameSocket = new ServerSocket(port);
         Socket nameS = nameSocket.accept();
         OutputStream os = nameS.getOutputStream();
         os.write(torrentFiles.get(index).name.getBytes());
         os.close();
         nameSocket.close();
         nameS.close();
-        sendFile(index + 1);
+        sendFile(index + 1, clientID);
     }
 
     /**
@@ -127,8 +115,9 @@ public class Server {
      * @param index File number provided from client.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
-    private void sendFile(int index) throws IOException {
-        ServerSocket ssDL = new ServerSocket(5000);
+    private void sendFile(int index, int clientID) throws IOException {
+        int port = 5000 + (clientID * 10);
+        ServerSocket ssDL = new ServerSocket(port);
         log("Waiting for connection...");
         Socket socket = ssDL.accept();
         index -= 1;
@@ -139,7 +128,7 @@ public class Server {
         byte[] contents;
         long fileLength = file.length();
         long current = 0;
-        log("Sending file ... ");
+        log("Sending file to client " + clientID + "...");
         while (current != fileLength) {
             int size = 10000;
             if (fileLength - current >= size)
@@ -167,14 +156,11 @@ public class Server {
      * @return Returns file name received from the client.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
-    private String receiveName() throws IOException {
-        System.out.println("Creating socket...");
-        Socket socket = new Socket(InetAddress.getByName("localhost"), 5001);
-        System.out.println("Socket created!");
+    private String receiveName(int clientID) throws IOException {
+        int port = 5001 + (clientID * 10);
+        Socket socket = new Socket(InetAddress.getByName("localhost"), port);
         BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        System.out.println("Reading name...");
         String name = reader.readLine();
-        System.out.println(name);
         reader.close();
         socket.close();
         return name;
@@ -186,16 +172,18 @@ public class Server {
      * @param name Name of file received from the client that will be used to save it as on the server.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
-    private void receiveFile(String name) throws IOException {
-        Socket socket = new Socket(InetAddress.getByName("localhost"), 5000);
+    private void receiveFile(String name, int clientID) throws IOException {
+        int port = 5000 + (clientID * 10);
+        Socket socket = new Socket(InetAddress.getByName("localhost"), port);
         byte[] file = new byte[10000];
         String filePath = "D:\\TorrentS\\" + name;
+        log("Receiving file from client " + clientID + "...");
         FileOutputStream fos = new FileOutputStream(filePath);
         BufferedOutputStream bos = new BufferedOutputStream(fos);
         InputStream is = socket.getInputStream();
-        int reading;
-        while ((reading = is.read(file)) != -1)
-            bos.write(file, 0, reading);
+        int reader;
+        while ((reader = is.read(file)) != -1)
+            bos.write(file, 0, reader);
         bos.flush();
         socket.close();
         torrentFiles.add(new TorrentFile(filePath));
@@ -205,7 +193,7 @@ public class Server {
     /**
      * Prints details about files that are stored on the file server.
      */
-    private void retrieveFiles() {
+    private void showFileList() {
         System.out.println("There are " + torrentFiles.size() + " files on the server." +
                 "\nFull list:");
         for (int i = 0; i < torrentFiles.size(); i++) {
@@ -225,7 +213,6 @@ public class Server {
                 output.append("#").append(i + 1).append(": ").append(torrentFiles.get(i).toString());
                 output.append('\n');
             }
-            output.append('\n');
             String toSend = output.toString();
             socket.getOutputStream().write((toSend).getBytes());
         } catch (IOException e) {
@@ -263,6 +250,7 @@ public class Server {
      * Reads file to the array from default location.
      */
     private void readFilesFromDirectory() {
+        long start = System.currentTimeMillis();
         log("Preparing file list...");
         torrentFiles = new ArrayList<>();
         String homeLocation = "D:\\TorrentS";
@@ -270,7 +258,8 @@ public class Server {
         for (File f : Objects.requireNonNull(actual.listFiles())) {
             torrentFiles.add(new TorrentFile(homeLocation + "\\" + f.getName()));
         }
-        log("File list is ready.");
+        long end = System.currentTimeMillis();
+        log("Reading from directory took " + (end - start) + " ms.");
     }
 
     /**
