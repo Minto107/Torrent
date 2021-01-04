@@ -12,9 +12,13 @@ import java.util.regex.Pattern;
  * Client class creates a client that connects to desired server on the same computer(localhost).
  */
 public class Client {
+    private boolean run = false;
+    private boolean exit = false;
     private Socket client;
-    private boolean readMode;
+    private boolean readMode = true;
     private BufferedReader bf;
+    private int clientID;
+    private String saveLocation;
     private static boolean multiHostMode;
 
     /**
@@ -23,13 +27,15 @@ public class Client {
      */
     public Client(int port) {
         try {
-            boolean exit = false;
-            readMode = true;
             Scanner scanner = new Scanner(System.in);
             client = new Socket(InetAddress.getByName("localhost"), port);
             PrintWriter printWriter = new PrintWriter(client.getOutputStream(), false);
             bf = new BufferedReader(new InputStreamReader(client.getInputStream()));
             while (!exit) {
+                if (!run) {
+                    readClientID();
+                    System.out.println("Your client ID: " + clientID);
+                }
                 readFromServer();
                 Thread.sleep(1000);
                 System.out.print("Enter file number that you'd like to download or write exit to exit: ");
@@ -38,9 +44,16 @@ public class Client {
                 Pattern pattern = Pattern.compile("[C-Z]?:?[\\\\]*[\\wW.]*");
                 Matcher matcher = pattern.matcher(choice);
                 boolean match = matcher.find();
-                if (choice.equals("exit")) {
+                if (choice.equals("exit") || choice.equals("e")) {
                     exit = true;
+                    printWriter.write("e\n");
+                    printWriter.flush();
+                    printWriter.close();
+                    readMode = false;
+                    bf.close();
+                    scanner.close();
                     client.close();
+                    System.out.println("Client " + clientID + " has successfully been closed.");
                 } else if (isInteger(choice)) {
                     printWriter.write(choice + '\n');
                     System.out.println("Sending choice...");
@@ -55,19 +68,35 @@ public class Client {
                     printWriter.flush();
                     sendName(choice);
                 } else {
-                    System.out.println("That's not what we wanted to see");
+                    System.out.println("You have provided wrong file number or wrong path to file to send to the server.");
                 }
             }
         } catch (IOException | InterruptedException e) {
-            System.out.println("Client closing...");
+            e.printStackTrace();
         }
+    }
+
+    private void readClientID() throws IOException {
+        Socket receive = new Socket(InetAddress.getByName("localhost"), 5010);
+        BufferedReader reader = new BufferedReader(new InputStreamReader(receive.getInputStream()));
+        clientID = Integer.parseInt(reader.readLine());
+        reader.close();
+        receive.close();
+        run = true;
+        setDownloadLocation();
+    }
+
+    private void setDownloadLocation() {
+        saveLocation = "D:\\Torrent_" + clientID;
+        new File(saveLocation).mkdir();
     }
 
     /**
      * Starts new thread that will read any messages that are being sent from the server.
      */
     private void readFromServer() {
-        System.out.println("Connected to a file server at " + client.getPort());
+        if (!run)
+            System.out.println("Connected to a file server at " + client.getPort());
         Thread thread = new Thread(() -> {
             try {
                 String userInput;
@@ -85,7 +114,8 @@ public class Client {
                     }
                 }
             } catch (IOException ioException) {
-                ioException.printStackTrace();
+                if (!exit)
+                    ioException.printStackTrace();
             }
         });
         thread.start();
@@ -117,7 +147,7 @@ public class Client {
     private void receiveFile(String name) throws IOException {
         Socket socket = new Socket(InetAddress.getByName("localhost"), 5000);
         byte[] file = new byte[10000];
-        String filePath = "D:\\Torrent\\" + name;
+        String filePath = saveLocation + "\\" + name;
         FileOutputStream fos = new FileOutputStream(filePath);
         BufferedOutputStream bos = new BufferedOutputStream(fos);
         InputStream is = socket.getInputStream();
@@ -125,8 +155,9 @@ public class Client {
         while ((reading = is.read(file)) != -1)
             bos.write(file, 0, reading);
         bos.flush();
+        bos.close();
+        fos.close();
         socket.close();
-
         System.out.println("File " + name + " saved to " + filePath);
         readMode = true;
     }

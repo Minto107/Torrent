@@ -12,18 +12,20 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Server class is used to create a file server
  */
 public class Server {
     private List<TorrentFile> torrentFiles;
-    private Socket server;
     private boolean firstRun;
     private static boolean multiHostMode;
+    private int clientID = 0;
 
     /**
      * Creates new Server object
+     *
      * @param port Enter port that you want the server to run on
      */
     public Server(int port) {
@@ -34,31 +36,76 @@ public class Server {
             readFilesFromDirectory();
             retrieveFiles();
             log("Waiting for clients to connect...");
-            server = ss.accept();
-            log("Client connected!");
-            sendFileListToClient();
+            /*server = ss.accept();
+            handleClient(ss.accept());
+            log("Client " + clientID + " connected!");
+            sendFileListToClient();*/
             while (true) {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(server.getInputStream()));
+                handleClient(ss.accept());
+                log("Client " + clientID + " connected!");
+                /*BufferedReader reader = new BufferedReader(new InputStreamReader(server.getInputStream()));
                 String userInput = reader.readLine();
                 if (userInput != null) {
                     if (isInteger(userInput)) {
                         sendName(Integer.parseInt(userInput));
                     } else {
-                        System.out.println("Preparing to receive the file....");
                         String name = receiveName();
                         System.out.println(name);
                         receiveFile(name);
                     }
-                    sendFileListToClient();
-                }
+                    //sendFileListToClient();
+                }*/
             }
         } catch (IOException e) {
             log("Server is closing...");
         }
     }
 
+    private void handleClient(Socket socket) {
+        clientID++;
+        AtomicBoolean alive = new AtomicBoolean(true);
+        log("Creating handler for client " + clientID);
+        new Thread(() -> {
+            try {
+                sendClientID();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                sendFileListToClient(socket);
+                String userInput = reader.readLine();
+                if (userInput != null) {
+                    if (isInteger(userInput)) {
+                        sendName(Integer.parseInt(userInput));
+                    } else if (userInput.equals("e")) {
+                        alive.set(false);
+                        reader.close();
+                        socket.close();
+                        log("Client " + clientID + " disconnected.");
+                    } else {
+                        String name = receiveName();
+                        System.out.println(name);
+                        receiveFile(name);
+                    }
+                    if (alive.get())
+                        sendFileListToClient(socket);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    private void sendClientID() throws IOException {
+        ServerSocket serverSocket = new ServerSocket(5010);
+        Socket send = serverSocket.accept();
+        OutputStream os = send.getOutputStream();
+        os.write(String.valueOf(clientID).getBytes());
+        os.close();
+        serverSocket.close();
+        send.close();
+    }
+
     /**
      * Sends name of the file to the client so it can download the file and use it's correct name and extension.
+     *
      * @param index File number provided from client.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
@@ -75,7 +122,8 @@ public class Server {
     }
 
     /**
-     * Sends the desired file to the client.
+     * Sends the selected file to the client.
+     *
      * @param index File number provided from client.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
@@ -105,13 +153,17 @@ public class Server {
             os.write(contents);
         }
         os.flush();
+        os.close();
+        bis.close();
+        fis.close();
         socket.close();
         ssDL.close();
-        log("File sent succesfully!");
+        log("File sent successfully!");
     }
 
     /**
      * Receives the file name from the client.
+     *
      * @return Returns file name received from the client.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
@@ -130,6 +182,7 @@ public class Server {
 
     /**
      * Receives file from the client.
+     *
      * @param name Name of file received from the client that will be used to save it as on the server.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
@@ -163,10 +216,10 @@ public class Server {
     /**
      * Sends file list to the connected client(s).
      */
-    private void sendFileListToClient() {
+    private void sendFileListToClient(Socket socket) {
         try {
             StringBuilder output = new StringBuilder();
-            server.getOutputStream().write(("There are " + torrentFiles.size() + " files on the server." +
+            socket.getOutputStream().write(("There are " + torrentFiles.size() + " files on the server." +
                     "\nFull list:\n").getBytes());
             for (int i = 0; i < torrentFiles.size(); i++) {
                 output.append("#").append(i + 1).append(": ").append(torrentFiles.get(i).toString());
@@ -174,7 +227,7 @@ public class Server {
             }
             output.append('\n');
             String toSend = output.toString();
-            server.getOutputStream().write((toSend).getBytes());
+            socket.getOutputStream().write((toSend).getBytes());
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -182,6 +235,7 @@ public class Server {
 
     /**
      * Provides basic logging functionality
+     *
      * @param s String to save to the log and display on the console.
      */
     private void log(String s) {
@@ -190,6 +244,7 @@ public class Server {
                 PrintWriter writer = new PrintWriter("log.txt");
                 SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss z");
                 Date date = new Date(System.currentTimeMillis());
+                writer.write("TORrent SKJ project by s21300\n");
                 writer.write("Logging started on " + formatter.format(date) + '\n');
                 writer.flush();
                 writer.close();
@@ -220,6 +275,7 @@ public class Server {
 
     /**
      * Checks if received line from client is an Integer.
+     *
      * @param s String to check if is an Integer.
      * @return Returns whether provided String is an Integer.
      */
@@ -249,6 +305,7 @@ public class Server {
 
     /**
      * Runs the server.
+     *
      * @param args You can provide additional parameter (-MH) to run server in multihost mode.
      */
     public static void main(String[] args) {

@@ -48,10 +48,8 @@ public class TorrentFile {
                     md5.update(bytes, 0, numRead);
                 }
             } while (numRead != -1);
-
             byte[] b = md5.digest();
             StringBuilder sb = new StringBuilder();
-
             for (byte value : b) {
                 sb.append(Integer.toString((value & 0xff) + 0x100, 16).substring(1));
             }
