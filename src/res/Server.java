@@ -20,20 +20,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class Server {
     private List<TorrentFile> torrentFiles;
     private boolean firstRun;
-    private static boolean multiHostMode;
+    private boolean multiHostMode;
     private int clientID = 0;
+    private int partID = 0;
 
     /**
      * Creates new Server object
      *
      * @param port Enter port that you want the server to run on
      */
-    public Server(int port) {
+    public Server(int port, boolean multiHostMode) {
         try {
+            this.multiHostMode = multiHostMode;
             firstRun = true;
             ServerSocket ss = new ServerSocket(port);
-            if (multiHostMode)
-                log("EXPERIMENTAL: Running server in Multihost mode!");
+            if (this.multiHostMode)
+                log("INFO: Running server in Multihost mode!");
             log("Server listening on port " + ss.getLocalPort());
             readFilesFromDirectory();
             showFileList();
@@ -47,37 +49,22 @@ public class Server {
         }
     }
 
-    private void handleClient(Socket socket) {
-        clientID++;
-        int myID = clientID;
-        AtomicBoolean alive = new AtomicBoolean(true);
-        log("Creating handler for client " + myID);
-        new Thread(() -> {
-            try {
-                sendClientID(myID);
-                BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                sendFileListToClient(socket);
-                String userInput = reader.readLine();
-                if (userInput != null) {
-                    if (isInteger(userInput)) {
-                        sendName(Integer.parseInt(userInput), myID);
-                    } else if (userInput.equals("e")) {
-                        alive.set(false);
-                        reader.close();
-                        socket.close();
-                        log("Client " + myID + " disconnected.");
-                    } else {
-                        String name = receiveName(myID);
-                        System.out.println(name);
-                        receiveFile(name, myID);
-                    }
-                    if (alive.get())
-                        sendFileListToClient(socket);
+    public static void splitFile(File f) throws IOException {
+        int partCounter = 1;
+        double partSize = f.length() / 3;
+        byte[] buffer = new byte[(int) partSize];
+        String fileName = f.getName();
+        try (FileInputStream fis = new FileInputStream(f);
+             BufferedInputStream bis = new BufferedInputStream(fis)) {
+            int bytesAmount;
+            while ((bytesAmount = bis.read(buffer)) > 0) {
+                String filePartName = String.format("%s.%03d", fileName, partCounter++);
+                File newFile = new File(f.getParent(), filePartName);
+                try (FileOutputStream out = new FileOutputStream(newFile)) {
+                    out.write(buffer, 0, bytesAmount);
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
             }
-        }).start();
+        }
     }
 
     private void sendClientID(int clientID) throws IOException {
@@ -88,6 +75,44 @@ public class Server {
         os.close();
         serverSocket.close();
         send.close();
+    }
+
+    private void handleClient(Socket socket) {
+        clientID++;
+        int myID = clientID;
+        AtomicBoolean alive = new AtomicBoolean(true);
+        log("Creating handler for client " + myID);
+        new Thread(() -> {
+            try {
+                sendClientID(myID);
+                BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                sendFileListToClient(socket);
+                while (true) {
+                    String userInput = null;
+                    if (alive.get()) {
+                        userInput = reader.readLine();
+                    }
+                    if (userInput != null) {
+                        if (isInteger(userInput)) {
+                            sendName(Integer.parseInt(userInput), myID);
+                        } else if (userInput.equals("e")) {
+                            alive.set(false);
+                            reader.close();
+                            socket.close();
+                            log("Client " + myID + " disconnected.");
+                        } else {
+                            String name = receiveName(myID);
+                            System.out.println(name);
+                            receiveFile(name, myID);
+                        }
+                        if (alive.get())
+                            sendFileListToClient(socket);
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }).start();
     }
 
     /**
@@ -106,7 +131,25 @@ public class Server {
         os.close();
         nameSocket.close();
         nameS.close();
-        sendFile(index + 1, clientID);
+        if (!multiHostMode) {
+            sendFile(index, clientID);
+        } else {
+            splitFile(new File(torrentFiles.get(index).fileLocation));
+            List<File> files = new ArrayList<>();
+            files.add(new File(torrentFiles.get(index).fileLocation + ".001"));
+            files.add(new File(torrentFiles.get(index).fileLocation + ".002"));
+            files.add(new File(torrentFiles.get(index).fileLocation + ".003"));
+            File file = new File(torrentFiles.get(index).fileLocation + ".004");
+            if (file.exists())
+                files.add(file);
+            for (File f : files) {
+                sendFile(f.getPath(), clientID);
+                f.delete();
+            }
+            log("All parts sent successfully");
+            partID = 0;
+            log("exit");
+        }
     }
 
     /**
@@ -117,36 +160,74 @@ public class Server {
      */
     private void sendFile(int index, int clientID) throws IOException {
         int port = 5000 + (clientID * 10);
-        ServerSocket ssDL = new ServerSocket(port);
-        log("Waiting for connection...");
-        Socket socket = ssDL.accept();
-        index -= 1;
-        File file = new File(torrentFiles.get(index).fileLocation);
-        FileInputStream fis = new FileInputStream(file);
-        BufferedInputStream bis = new BufferedInputStream(fis);
-        OutputStream os = socket.getOutputStream();
-        byte[] contents;
-        long fileLength = file.length();
-        long current = 0;
-        log("Sending file to client " + clientID + "...");
-        while (current != fileLength) {
-            int size = 10000;
-            if (fileLength - current >= size)
-                current += size;
-            else {
-                size = (int) (fileLength - current);
-                current = fileLength;
+        if (!multiHostMode) {
+            ServerSocket ssDL = new ServerSocket(port);
+            log("Waiting for connection...");
+            Socket socket = ssDL.accept();
+            File file = new File(torrentFiles.get(index).fileLocation);
+            FileInputStream fis = new FileInputStream(file);
+            BufferedInputStream bis = new BufferedInputStream(fis);
+            OutputStream os = socket.getOutputStream();
+            byte[] contents;
+            long fileLength = file.length();
+            long current = 0;
+            log("Sending file to client " + clientID + "...");
+            while (current != fileLength) {
+                int size = 10000;
+                if (fileLength - current >= size)
+                    current += size;
+                else {
+                    size = (int) (fileLength - current);
+                    current = fileLength;
+                }
+                contents = new byte[size];
+                bis.read(contents, 0, size);
+                os.write(contents);
             }
-            contents = new byte[size];
-            bis.read(contents, 0, size);
-            os.write(contents);
+            os.flush();
+            os.close();
+            bis.close();
+            fis.close();
+            socket.close();
+            ssDL.close();
         }
-        os.flush();
-        os.close();
-        bis.close();
-        fis.close();
-        socket.close();
-        ssDL.close();
+        log("File sent successfully!");
+    }
+
+    private void sendFile(String filepath, int clientID) throws IOException {
+        int port = 5000 + (clientID * 10);
+        if (multiHostMode) {
+            ServerSocket ssDL = new ServerSocket(port + partID);
+            partID++;
+            log("Waiting for connection...");
+            Socket socket = ssDL.accept();
+            File file = new File(filepath);
+            FileInputStream fis = new FileInputStream(file);
+            BufferedInputStream bis = new BufferedInputStream(fis);
+            OutputStream os = socket.getOutputStream();
+            byte[] contents;
+            long fileLength = file.length();
+            long current = 0;
+            log("Sending file to client " + clientID + "...");
+            while (current != fileLength) {
+                int size = 10000;
+                if (fileLength - current >= size)
+                    current += size;
+                else {
+                    size = (int) (fileLength - current);
+                    current = fileLength;
+                }
+                contents = new byte[size];
+                bis.read(contents, 0, size);
+                os.write(contents);
+            }
+            os.flush();
+            os.close();
+            bis.close();
+            fis.close();
+            socket.close();
+            ssDL.close();
+        }
         log("File sent successfully!");
     }
 
@@ -290,16 +371,5 @@ public class Server {
             }
         }
         return true;
-    }
-
-    /**
-     * Runs the server.
-     *
-     * @param args You can provide additional parameter (-MH) to run server in multihost mode.
-     */
-    public static void main(String[] args) {
-        if (args != null || args[0].equals("-MH"))
-            multiHostMode = true;
-        new Server(44431);
     }
 }

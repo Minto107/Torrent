@@ -4,6 +4,9 @@ import java.io.*;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -15,17 +18,19 @@ public class Client {
     private boolean run = false;
     private boolean exit = false;
     private Socket client;
-    private boolean readMode = true;
+    private final boolean multiHostMode;
     private BufferedReader bf;
-    private int clientID;
+    private boolean readMode = true, ok;
     private String saveLocation;
-    private static boolean multiHostMode;
+    private int clientID, partID = 0;
 
     /**
      * Creates Client object and connects with a file server.
+     *
      * @param port Port number that client will try to connect to.
      */
-    public Client(int port) {
+    public Client(int port, boolean multiHostMode) {
+        this.multiHostMode = multiHostMode;
         try {
             Scanner scanner = new Scanner(System.in);
             client = new Socket(InetAddress.getByName("localhost"), port);
@@ -61,7 +66,28 @@ public class Client {
                     System.out.println("Sent!");
                     String name = receiveName();
                     System.out.println("Received name");
-                    receiveFile(name);
+                    if (!multiHostMode) {
+                        receiveFile(name);
+                    } else {
+                        receiveFile(name + ".001");
+                        receiveFile(name + ".002");
+                        receiveFile(name + ".003");
+                        ok = true;
+                        receiveFile(name + ".004");
+                        ok = false;
+                        List<File> files = new ArrayList<>();
+                        files.add(new File(saveLocation + "\\" + name + ".001"));
+                        files.add(new File(saveLocation + "\\" + name + ".002"));
+                        files.add(new File(saveLocation + "\\" + name + ".003"));
+                        File file = new File(saveLocation + "\\" + name + ".004");
+                        if (file.exists())
+                            files.add(file);
+                        mergeFiles(files, new File(saveLocation + "\\" + name));
+                        for (File i : files) {
+                            i.delete();
+                        }
+                        partID = 0;
+                    }
                 } else if (match) {
                     System.out.println("Sending file... ");
                     printWriter.write(choice + '\n');
@@ -72,7 +98,19 @@ public class Client {
                 }
             }
         } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
+            if (!ok) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public static void mergeFiles(List<File> files, File target)
+            throws IOException {
+        try (FileOutputStream fos = new FileOutputStream(target);
+             BufferedOutputStream bos = new BufferedOutputStream(fos)) {
+            for (File f : files) {
+                Files.copy(f.toPath(), bos);
+            }
         }
     }
 
@@ -121,7 +159,38 @@ public class Client {
     }
 
     /**
+     * Checks if received line from client is an Integer.
+     *
+     * @param s String to check if is an Integer.
+     * @return Returns whether provided String is an Integer.
+     */
+    private static boolean isInteger(String s) {
+        if (s == null) {
+            return false;
+        }
+        int length = s.length();
+        if (length == 0) {
+            return false;
+        }
+        int i = 0;
+        if (s.charAt(0) == '-') {
+            if (length == 1) {
+                return false;
+            }
+            i = 1;
+        }
+        for (; i < length; i++) {
+            char c = s.charAt(i);
+            if (c < '0' || c > '9') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Receives file name that will be later used to create and store a file.
+     *
      * @return Returns String containing file name that will be used to store a file.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
@@ -141,31 +210,60 @@ public class Client {
 
     /**
      * Receives the file from the server.
+     *
      * @param name String that will be used as file name to store it in download location.
-     * @throws IOException if an I/O error occurs when opening the socket.
      */
-    private void receiveFile(String name) throws IOException {
+    private void receiveFile(String name) {
         int port = 5000 + (clientID * 10);
-        Socket socket = new Socket(InetAddress.getByName("localhost"), port);
-        System.out.println("Listening on port " + socket.getPort());
-        byte[] file = new byte[10000];
         String filePath = saveLocation + "\\" + name;
-        FileOutputStream fos = new FileOutputStream(filePath);
-        BufferedOutputStream bos = new BufferedOutputStream(fos);
-        InputStream is = socket.getInputStream();
-        int reading;
-        while ((reading = is.read(file)) != -1)
-            bos.write(file, 0, reading);
-        bos.flush();
-        bos.close();
-        fos.close();
-        socket.close();
-        System.out.println("File " + name + " saved to " + filePath);
+        if (!multiHostMode) {
+            try {
+                Socket socket = new Socket(InetAddress.getByName("localhost"), port);
+                System.out.println("Listening on port " + socket.getPort());
+                byte[] file = new byte[10000];
+                FileOutputStream fos = new FileOutputStream(filePath);
+                BufferedOutputStream bos = new BufferedOutputStream(fos);
+                InputStream is = socket.getInputStream();
+                int reading;
+                while ((reading = is.read(file)) != -1)
+                    bos.write(file, 0, reading);
+                bos.flush();
+                bos.close();
+                fos.close();
+                is.close();
+                socket.close();
+                System.out.println("File " + name + " saved to " + filePath);
+            } catch (IOException e) {
+                //
+            }
+        } else {
+            try {
+                Socket socket = new Socket(InetAddress.getByName("localhost"), port + partID);
+                partID++;
+                System.out.println("Listening on port " + socket.getPort());
+                byte[] file = new byte[10000];
+                FileOutputStream fos = new FileOutputStream(filePath);
+                BufferedOutputStream bos = new BufferedOutputStream(fos);
+                InputStream is = socket.getInputStream();
+                int reading;
+                while ((reading = is.read(file)) != -1)
+                    bos.write(file, 0, reading);
+                bos.flush();
+                bos.close();
+                fos.close();
+                is.close();
+                socket.close();
+                System.out.println("File " + name + " saved to " + filePath);
+            } catch (IOException e) {
+                //
+            }
+        }
         readMode = true;
     }
 
     /**
      * Sends the file name to the server.
+     *
      * @param filePath String containing path to the file that's name will be sent to the file server.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
@@ -189,6 +287,7 @@ public class Client {
 
     /**
      * Sends file to the server.
+     *
      * @param filePath String containing path to the file that will be sent to the file server.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
@@ -227,44 +326,5 @@ public class Client {
             socket.close();
             ssDL.close();
         }
-    }
-
-    /**
-     * Checks if received line from client is an Integer.
-     * @param s String to check if is an Integer.
-     * @return Returns whether provided String is an Integer.
-     */
-    private static boolean isInteger(String s) {
-        if (s == null) {
-            return false;
-        }
-        int length = s.length();
-        if (length == 0) {
-            return false;
-        }
-        int i = 0;
-        if (s.charAt(0) == '-') {
-            if (length == 1) {
-                return false;
-            }
-            i = 1;
-        }
-        for (; i < length; i++) {
-            char c = s.charAt(i);
-            if (c < '0' || c > '9') {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Runs the client.
-     * @param args You can provide additional parameter (-MH) to run client in multihost mode.
-     */
-    public static void main(String[] args) {
-        if (args != null || args[0].equals("-MH"))
-            multiHostMode = true;
-        new Client(44431);
     }
 }

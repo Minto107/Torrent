@@ -1,0 +1,1 @@
+java -jar TorrentCS.jar -S

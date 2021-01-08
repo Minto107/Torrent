@@ -22,7 +22,7 @@ public class TorrentFile {
      */
 
     public TorrentFile(String fileLocation) {
-        Pattern pattern = Pattern.compile("[\\\\]{0}[\\w-.]*$");
+        Pattern pattern = Pattern.compile("[\\\\]{0}[\\w- .]*$");
         Matcher matcher = pattern.matcher(fileLocation);
         matcher.find();
         name = matcher.group(0);
