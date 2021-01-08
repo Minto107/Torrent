@@ -20,7 +20,7 @@ public class Client {
     private Socket client;
     private final boolean multiHostMode;
     private BufferedReader bf;
-    private boolean readMode = true, ok;
+    private boolean readMode = true, lastPart;
     private String saveLocation;
     private int clientID, partID = 0;
 
@@ -72,9 +72,9 @@ public class Client {
                         receiveFile(name + ".001");
                         receiveFile(name + ".002");
                         receiveFile(name + ".003");
-                        ok = true;
+                        lastPart = true;
                         receiveFile(name + ".004");
-                        ok = false;
+                        lastPart = false;
                         List<File> files = new ArrayList<>();
                         files.add(new File(saveLocation + "\\" + name + ".001"));
                         files.add(new File(saveLocation + "\\" + name + ".002"));
@@ -98,7 +98,7 @@ public class Client {
                 }
             }
         } catch (IOException | InterruptedException e) {
-            if (!ok) {
+            if (!lastPart) {
                 e.printStackTrace();
             }
         }
