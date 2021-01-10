@@ -20,7 +20,7 @@ public class Client {
     private Socket client;
     private final boolean multiHostMode;
     private BufferedReader bf;
-    private boolean readMode = true, lastPart;
+    private boolean readMode = true;
     private String saveLocation;
     private int clientID, partID = 0;
 
@@ -44,12 +44,11 @@ public class Client {
                 readFromServer();
                 Thread.sleep(1000);
                 System.out.print("Enter file number that you'd like to download or write exit to exit: ");
-                String choice = scanner.nextLine();
-                System.out.println(choice);
+                String input = scanner.nextLine();
                 Pattern pattern = Pattern.compile("[C-Z]?:?[\\\\]*[\\wW.]*");
-                Matcher matcher = pattern.matcher(choice);
+                Matcher matcher = pattern.matcher(input);
                 boolean match = matcher.find();
-                if (choice.equals("exit") || choice.equals("e")) {
+                if (input.equals("exit") || input.equals("e")) {
                     exit = true;
                     printWriter.write("e\n");
                     printWriter.flush();
@@ -59,22 +58,17 @@ public class Client {
                     scanner.close();
                     client.close();
                     System.out.println("Client " + clientID + " has successfully been closed.");
-                } else if (isInteger(choice)) {
-                    printWriter.write(choice + '\n');
-                    System.out.println("Sending choice...");
+                } else if (isInteger(input)) {
+                    printWriter.write(input + '\n');
                     printWriter.flush();
-                    System.out.println("Sent!");
                     String name = receiveName();
-                    System.out.println("Received name");
                     if (!multiHostMode) {
                         receiveFile(name);
                     } else {
                         receiveFile(name + ".001");
                         receiveFile(name + ".002");
                         receiveFile(name + ".003");
-                        lastPart = true;
                         receiveFile(name + ".004");
-                        lastPart = false;
                         List<File> files = new ArrayList<>();
                         files.add(new File(saveLocation + "\\" + name + ".001"));
                         files.add(new File(saveLocation + "\\" + name + ".002"));
@@ -82,34 +76,33 @@ public class Client {
                         File file = new File(saveLocation + "\\" + name + ".004");
                         if (file.exists())
                             files.add(file);
-                        mergeFiles(files, new File(saveLocation + "\\" + name));
+                        joinParts(files, new File(saveLocation + "\\" + name));
                         for (File i : files) {
                             i.delete();
                         }
+                        System.out.println("All parts downloaded and saved as: " + saveLocation + "\\" + name);
                         partID = 0;
                     }
                 } else if (match) {
                     System.out.println("Sending file... ");
-                    printWriter.write(choice + '\n');
+                    printWriter.write(input + '\n');
                     printWriter.flush();
-                    sendName(choice);
+                    sendName(input);
                 } else {
                     System.out.println("You have provided wrong file number or wrong path to file to send to the server.");
                 }
             }
         } catch (IOException | InterruptedException e) {
-            if (!lastPart) {
-                e.printStackTrace();
-            }
+            e.printStackTrace();
         }
     }
 
-    public static void mergeFiles(List<File> files, File target)
+    public static void joinParts(List<File> files, File target)
             throws IOException {
         try (FileOutputStream fos = new FileOutputStream(target);
              BufferedOutputStream bos = new BufferedOutputStream(fos)) {
-            for (File f : files) {
-                Files.copy(f.toPath(), bos);
+            for (File file : files) {
+                Files.copy(file.toPath(), bos);
             }
         }
     }
@@ -142,7 +135,6 @@ public class Client {
                 while (true) {
                     if (!readMode) {
                         if (counter == 0) {
-                            System.out.println("Reading will stop");
                             counter++;
                         }
                     } else {
@@ -195,14 +187,10 @@ public class Client {
      * @throws IOException if an I/O error occurs when opening the socket.
      */
     private String receiveName() throws IOException {
-        System.out.println("Creating socket...");
         int port = 5001 + (clientID * 10);
         Socket socket = new Socket(InetAddress.getByName("localhost"), port);
-        System.out.println("Socket created!");
         BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        System.out.println("Reading name...");
         String name = reader.readLine();
-        System.out.println(name);
         reader.close();
         socket.close();
         return name;
@@ -219,7 +207,6 @@ public class Client {
         if (!multiHostMode) {
             try {
                 Socket socket = new Socket(InetAddress.getByName("localhost"), port);
-                System.out.println("Listening on port " + socket.getPort());
                 byte[] file = new byte[10000];
                 FileOutputStream fos = new FileOutputStream(filePath);
                 BufferedOutputStream bos = new BufferedOutputStream(fos);
@@ -240,7 +227,6 @@ public class Client {
             try {
                 Socket socket = new Socket(InetAddress.getByName("localhost"), port + partID);
                 partID++;
-                System.out.println("Listening on port " + socket.getPort());
                 byte[] file = new byte[10000];
                 FileOutputStream fos = new FileOutputStream(filePath);
                 BufferedOutputStream bos = new BufferedOutputStream(fos);
@@ -275,13 +261,11 @@ public class Client {
         matcher.find();
         String name = matcher.group(0);
         Socket nameSoc = nameSocket.accept();
-        System.out.println("Connected!");
         OutputStream os = nameSoc.getOutputStream();
         os.write(name.getBytes());
         os.close();
         nameSocket.close();
         nameSoc.close();
-        System.out.println("Name was sent!");
         sendFile(filePath);
     }
 
@@ -294,7 +278,6 @@ public class Client {
     private void sendFile(String filePath) throws IOException {
         int port = 5000 + (clientID * 10);
         ServerSocket ssDL = new ServerSocket(port);
-        System.out.println("Waiting for connection...");
         Socket socket = ssDL.accept();
         File file = new File(filePath);
         if (file.exists()) {
@@ -304,7 +287,6 @@ public class Client {
             byte[] contents;
             long fileLength = file.length();
             long current = 0;
-            System.out.println("Sending file ... ");
             while (current != fileLength) {
                 int size = 10000;
                 if (fileLength - current >= size)

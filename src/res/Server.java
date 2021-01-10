@@ -19,10 +19,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class Server {
     private List<TorrentFile> torrentFiles;
-    private boolean firstRun;
-    private boolean multiHostMode;
-    private int clientID = 0;
-    private int partID = 0;
+    private boolean firstRun, multiHostMode;
+    private int clientID = 0, partID = 0;
 
     /**
      * Creates new Server object
@@ -49,19 +47,19 @@ public class Server {
         }
     }
 
-    public static void splitFile(File f) throws IOException {
-        int partCounter = 1;
-        double partSize = f.length() / 3;
+    public static void fileToParts(File file) throws IOException {
+        double partSize = file.length() / 3;
         byte[] buffer = new byte[(int) partSize];
-        String fileName = f.getName();
-        try (FileInputStream fis = new FileInputStream(f);
+        String fileName = file.getName();
+        int part = 1;
+        try (FileInputStream fis = new FileInputStream(file);
              BufferedInputStream bis = new BufferedInputStream(fis)) {
-            int bytesAmount;
-            while ((bytesAmount = bis.read(buffer)) > 0) {
-                String filePartName = String.format("%s.%03d", fileName, partCounter++);
-                File newFile = new File(f.getParent(), filePartName);
-                try (FileOutputStream out = new FileOutputStream(newFile)) {
-                    out.write(buffer, 0, bytesAmount);
+            int i;
+            while ((i = bis.read(buffer)) > 0) {
+                String partName = String.format("%s.%03d", fileName, part++);
+                File newFile = new File(file.getParent(), partName);
+                try (FileOutputStream fos = new FileOutputStream(newFile)) {
+                    fos.write(buffer, 0, i);
                 }
             }
         }
@@ -87,11 +85,9 @@ public class Server {
                 sendClientID(myID);
                 BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 sendFileListToClient(socket);
-                while (true) {
-                    String userInput = null;
-                    if (alive.get()) {
-                        userInput = reader.readLine();
-                    }
+                while (alive.get()) {
+                    String userInput;
+                    userInput = reader.readLine();
                     if (userInput != null) {
                         if (isInteger(userInput)) {
                             sendName(Integer.parseInt(userInput), myID);
@@ -134,7 +130,7 @@ public class Server {
         if (!multiHostMode) {
             sendFile(index, clientID);
         } else {
-            splitFile(new File(torrentFiles.get(index).fileLocation));
+            fileToParts(new File(torrentFiles.get(index).fileLocation));
             List<File> files = new ArrayList<>();
             files.add(new File(torrentFiles.get(index).fileLocation + ".001"));
             files.add(new File(torrentFiles.get(index).fileLocation + ".002"));
@@ -146,9 +142,7 @@ public class Server {
                 sendFile(f.getPath(), clientID);
                 f.delete();
             }
-            log("All parts sent successfully");
             partID = 0;
-            log("exit");
         }
     }
 
@@ -162,7 +156,6 @@ public class Server {
         int port = 5000 + (clientID * 10);
         if (!multiHostMode) {
             ServerSocket ssDL = new ServerSocket(port);
-            log("Waiting for connection...");
             Socket socket = ssDL.accept();
             File file = new File(torrentFiles.get(index).fileLocation);
             FileInputStream fis = new FileInputStream(file);
@@ -199,7 +192,6 @@ public class Server {
         if (multiHostMode) {
             ServerSocket ssDL = new ServerSocket(port + partID);
             partID++;
-            log("Waiting for connection...");
             Socket socket = ssDL.accept();
             File file = new File(filepath);
             FileInputStream fis = new FileInputStream(file);
