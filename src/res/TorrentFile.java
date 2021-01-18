@@ -12,6 +12,7 @@ import java.util.regex.Pattern;
  * Class TorrentFile is used for storing information like MD5 hash and file location for files that
  * are stored on the file server.
  */
+
 public class TorrentFile {
     String name, md5, fileLocation;
 
@@ -31,9 +32,10 @@ public class TorrentFile {
     }
 
     /**
+     * Generates MD5 for specified file
+     *
      * @param fileLocation MD5 will be generated for this file
      * @return Returns MD5 for specified file
-     * @brief Generates MD5 for specified file
      */
 
     private String generateMD5(String fileLocation) {
@@ -41,17 +43,21 @@ public class TorrentFile {
             FileInputStream fis = new FileInputStream(fileLocation);
             byte[] bytes = new byte[1024];
             MessageDigest md5 = MessageDigest.getInstance("MD5");
-            int numRead;
-            do {
-                numRead = fis.read(bytes);
-                if (numRead > 0) {
-                    md5.update(bytes, 0, numRead);
+            int i;
+            i = fis.read(bytes);
+            if (i > 0) {
+                md5.update(bytes, 0, i);
+            }
+            while (i != -1) {
+                i = fis.read(bytes);
+                if (i > 0) {
+                    md5.update(bytes, 0, i);
                 }
-            } while (numRead != -1);
+            }
             byte[] b = md5.digest();
             StringBuilder sb = new StringBuilder();
-            for (byte value : b) {
-                sb.append(Integer.toString((value & 0xff) + 0x100, 16).substring(1));
+            for (byte v : b) {
+                sb.append(Integer.toString((v & 0xff) + 0x100, 16).substring(1));
             }
             fis.close();
             return sb.toString();
@@ -62,8 +68,9 @@ public class TorrentFile {
     }
 
     /**
+     * Overloaded toString() method returns details about specified file in more user-friendly way
+     *
      * @return Returns String with details about specified file
-     * @brief Overloaded toString() method returns details about specified file in more user-friendly way
      */
 
     @Override

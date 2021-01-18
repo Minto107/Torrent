@@ -17,20 +17,23 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Server class is used to create a file server
  */
+
 public class Server {
-    private List<TorrentFile> torrentFiles;
-    private boolean firstRun, multiHostMode;
-    private int clientID = 0, partID = 0;
+    private final List<TorrentFile> torrentFiles = new ArrayList<>();
+    private int clientID = 1, partID = 0;
+    private final String location = "D:\\Torrent_" + clientID;
+    private boolean firstRun = true, multiHostMode;
 
     /**
      * Creates new Server object
      *
-     * @param port Enter port that you want the server to run on
+     * @param port          Sets the port that server will run on.
+     * @param multiHostMode Starts server in whether multi host mode or host2host.
      */
+
     public Server(int port, boolean multiHostMode) {
         try {
             this.multiHostMode = multiHostMode;
-            firstRun = true;
             ServerSocket ss = new ServerSocket(port);
             if (this.multiHostMode)
                 log("INFO: Running server in Multihost mode!");
@@ -38,7 +41,7 @@ public class Server {
             readFilesFromDirectory();
             showFileList();
             log("Waiting for clients to connect...");
-            while (true) {
+            while (!ss.isClosed()) {
                 handleClient(ss.accept());
                 log("Client " + clientID + " connected!");
             }
@@ -46,6 +49,13 @@ public class Server {
             log("Server is closing...");
         }
     }
+
+    /**
+     * Method splits file to either 3 or 4 parts.
+     *
+     * @param file File to be split.
+     * @throws IOException if an I/O error occurs.
+     */
 
     public static void fileToParts(File file) throws IOException {
         double partSize = file.length() / 3;
@@ -65,6 +75,44 @@ public class Server {
         }
     }
 
+    /**
+     * Checks if received line from client is an Integer.
+     *
+     * @param s String to check if is an Integer.
+     * @return Returns whether provided String is an Integer.
+     */
+
+    private static boolean isInteger(String s) {
+        if (s == null) {
+            return false;
+        }
+        int length = s.length();
+        if (length == 0) {
+            return false;
+        }
+        int i = 0;
+        if (s.charAt(0) == '-') {
+            if (length == 1) {
+                return false;
+            }
+            i = 1;
+        }
+        for (; i < length; i++) {
+            char c = s.charAt(i);
+            if (c < '0' || c > '9') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Sends the clientID to the Client
+     *
+     * @param clientID ClientID to be sent to the client.
+     * @throws IOException if an I/O error occurs.
+     */
+
     private void sendClientID(int clientID) throws IOException {
         ServerSocket serverSocket = new ServerSocket(10001);
         Socket send = serverSocket.accept();
@@ -74,6 +122,12 @@ public class Server {
         serverSocket.close();
         send.close();
     }
+
+    /**
+     * Creates thread in order to allow for multiple clients to connect at the same time.
+     *
+     * @param socket Socket is passed in order to create input and output streams that will connect to the client.
+     */
 
     private void handleClient(Socket socket) {
         clientID++;
@@ -114,12 +168,14 @@ public class Server {
     /**
      * Sends name of the file to the client so it can download the file and use it's correct name and extension.
      *
-     * @param index File number provided from client.
+     * @param index    File number provided from client.
+     * @param clientID ClientID is passed in order to generate unique ports for each client.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
+
     private void sendName(int index, int clientID) throws IOException {
         index -= 1;
-        int port = 5001 + (clientID * 10);
+        int port = 50001 + (clientID * 10);
         ServerSocket nameSocket = new ServerSocket(port);
         Socket nameS = nameSocket.accept();
         OutputStream os = nameS.getOutputStream();
@@ -149,11 +205,12 @@ public class Server {
     /**
      * Sends the selected file to the client.
      *
-     * @param index File number provided from client.
+     * @param index    File number provided from client.
+     * @param clientID ClientID is passed in order to generate unique ports for each client.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
     private void sendFile(int index, int clientID) throws IOException {
-        int port = 5000 + (clientID * 10);
+        int port = 50000 + (clientID * 10);
         if (!multiHostMode) {
             ServerSocket ssDL = new ServerSocket(port);
             Socket socket = ssDL.accept();
@@ -187,13 +244,21 @@ public class Server {
         log("File sent successfully!");
     }
 
-    private void sendFile(String filepath, int clientID) throws IOException {
-        int port = 5000 + (clientID * 10);
+    /**
+     * Method that is used in MultiHost mode to send multiple file parts.
+     *
+     * @param filePath Path to the file part to send.
+     * @param clientID ClientID is passed in order to generate unique ports for each client.
+     * @throws IOException if an I/O error occurs.
+     */
+
+    private void sendFile(String filePath, int clientID) throws IOException {
+        int port = 50000 + (clientID * 10);
         if (multiHostMode) {
             ServerSocket ssDL = new ServerSocket(port + partID);
             partID++;
             Socket socket = ssDL.accept();
-            File file = new File(filepath);
+            File file = new File(filePath);
             FileInputStream fis = new FileInputStream(file);
             BufferedInputStream bis = new BufferedInputStream(fis);
             OutputStream os = socket.getOutputStream();
@@ -226,11 +291,13 @@ public class Server {
     /**
      * Receives the file name from the client.
      *
+     * @param clientID ClientID is passed in order to generate unique ports for each client.
      * @return Returns file name received from the client.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
+
     private String receiveName(int clientID) throws IOException {
-        int port = 5001 + (clientID * 10);
+        int port = 50001 + (clientID * 10);
         Socket socket = new Socket(InetAddress.getByName("localhost"), port);
         BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         String name = reader.readLine();
@@ -242,14 +309,16 @@ public class Server {
     /**
      * Receives file from the client.
      *
-     * @param name Name of file received from the client that will be used to save it as on the server.
+     * @param name     Name of file received from the client that will be used to save it as on the server.
+     * @param clientID ClientID is passed in order to generate unique ports for each client.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
+
     private void receiveFile(String name, int clientID) throws IOException {
-        int port = 5000 + (clientID * 10);
+        int port = 50000 + (clientID * 10);
         Socket socket = new Socket(InetAddress.getByName("localhost"), port);
         byte[] file = new byte[10000];
-        String filePath = "D:\\TorrentS\\" + name;
+        String filePath = location + "\\" + name;
         log("Receiving file from client " + clientID + "...");
         FileOutputStream fos = new FileOutputStream(filePath);
         BufferedOutputStream bos = new BufferedOutputStream(fos);
@@ -266,6 +335,7 @@ public class Server {
     /**
      * Prints details about files that are stored on the file server.
      */
+
     private void showFileList() {
         System.out.println("There are " + torrentFiles.size() + " files on the server." +
                 "\nFull list:");
@@ -275,8 +345,11 @@ public class Server {
     }
 
     /**
-     * Sends file list to the connected client(s).
+     * Sends file list to the connected client.
+     *
+     * @param socket Socket is required so method can setup output stream to desired client.
      */
+
     private void sendFileListToClient(Socket socket) {
         try {
             StringBuilder output = new StringBuilder();
@@ -294,10 +367,11 @@ public class Server {
     }
 
     /**
-     * Provides basic logging functionality
+     * Provides basic logging functionality.
      *
      * @param s String to save to the log and display on the console.
      */
+
     private void log(String s) {
         try {
             if (firstRun) {
@@ -322,46 +396,15 @@ public class Server {
     /**
      * Reads file to the array from default location.
      */
+
     private void readFilesFromDirectory() {
         long start = System.currentTimeMillis();
         log("Preparing file list...");
-        torrentFiles = new ArrayList<>();
-        String homeLocation = "D:\\TorrentS";
-        File actual = new File("D:\\TorrentS");
+        File actual = new File(location);
         for (File f : Objects.requireNonNull(actual.listFiles())) {
-            torrentFiles.add(new TorrentFile(homeLocation + "\\" + f.getName()));
+            torrentFiles.add(new TorrentFile(location + "\\" + f.getName()));
         }
         long end = System.currentTimeMillis();
         log("Reading from directory took " + (end - start) + " ms.");
-    }
-
-    /**
-     * Checks if received line from client is an Integer.
-     *
-     * @param s String to check if is an Integer.
-     * @return Returns whether provided String is an Integer.
-     */
-    private static boolean isInteger(String s) {
-        if (s == null) {
-            return false;
-        }
-        int length = s.length();
-        if (length == 0) {
-            return false;
-        }
-        int i = 0;
-        if (s.charAt(0) == '-') {
-            if (length == 1) {
-                return false;
-            }
-            i = 1;
-        }
-        for (; i < length; i++) {
-            char c = s.charAt(i);
-            if (c < '0' || c > '9') {
-                return false;
-            }
-        }
-        return true;
     }
 }

@@ -15,12 +15,10 @@ import java.util.regex.Pattern;
  * Client class creates a client that connects to desired server on the same computer(localhost).
  */
 public class Client {
-    private boolean run = false;
-    private boolean exit = false;
+    private boolean run = false, exit = false, readMode = true;
     private Socket client;
     private final boolean multiHostMode;
     private BufferedReader bf;
-    private boolean readMode = true;
     private String saveLocation;
     private int clientID, partID = 0;
 
@@ -62,7 +60,7 @@ public class Client {
                     printWriter.write(input + '\n');
                     printWriter.flush();
                     String name = receiveName();
-                    if (!multiHostMode) {
+                    if (!this.multiHostMode) {
                         receiveFile(name);
                     } else {
                         receiveFile(name + ".001");
@@ -97,7 +95,15 @@ public class Client {
         }
     }
 
-    public static void joinParts(List<File> files, File target)
+    /**
+     * Method that joins multiple parts into one final file.
+     *
+     * @param files  List of files to join.
+     * @param target Target file path.
+     * @throws IOException throws IOException if an IO error occurs.
+     */
+
+    private static void joinParts(List<File> files, File target)
             throws IOException {
         try (FileOutputStream fos = new FileOutputStream(target);
              BufferedOutputStream bos = new BufferedOutputStream(fos)) {
@@ -107,55 +113,13 @@ public class Client {
         }
     }
 
-    private void readClientID() throws IOException {
-        Socket receive = new Socket(InetAddress.getByName("localhost"), 10001);
-        BufferedReader reader = new BufferedReader(new InputStreamReader(receive.getInputStream()));
-        clientID = Integer.parseInt(reader.readLine());
-        reader.close();
-        receive.close();
-        run = true;
-        setDownloadLocation();
-    }
-
-    private void setDownloadLocation() {
-        saveLocation = "D:\\Torrent_" + clientID;
-        new File(saveLocation).mkdir();
-    }
-
-    /**
-     * Starts new thread that will read any messages that are being sent from the server.
-     */
-    private void readFromServer() {
-        if (!run)
-            System.out.println("Connected to a file server at " + client.getPort());
-        new Thread(() -> {
-            try {
-                String userInput;
-                int counter = 0;
-                while (true) {
-                    if (!readMode) {
-                        if (counter == 0) {
-                            counter++;
-                        }
-                    } else {
-                        userInput = bf.readLine();
-                        System.out.println(userInput);
-                        System.out.println(bf.readLine());
-                    }
-                }
-            } catch (IOException ioException) {
-                if (!exit)
-                    ioException.printStackTrace();
-            }
-        }).start();
-    }
-
     /**
      * Checks if received line from client is an Integer.
      *
      * @param s String to check if is an Integer.
      * @return Returns whether provided String is an Integer.
      */
+
     private static boolean isInteger(String s) {
         if (s == null) {
             return false;
@@ -181,13 +145,65 @@ public class Client {
     }
 
     /**
+     * Reads its ClientID from server.
+     *
+     * @throws IOException throws IOException if an IO error occurs.
+     */
+
+    private void readClientID() throws IOException {
+        Socket receive = new Socket(InetAddress.getByName("localhost"), 10001);
+        BufferedReader reader = new BufferedReader(new InputStreamReader(receive.getInputStream()));
+        clientID = Integer.parseInt(reader.readLine());
+        reader.close();
+        receive.close();
+        run = true;
+        setDownloadLocation();
+    }
+
+    /**
+     * Sets download directory and creates the folder if it does not exist.
+     */
+
+    private void setDownloadLocation() {
+        saveLocation = "D:\\Torrent_" + clientID;
+        new File(saveLocation).mkdir();
+    }
+
+    /**
+     * Starts new thread that will read any messages that are being sent from the server.
+     */
+
+    private void readFromServer() {
+        if (!run)
+            System.out.println("Connected to a file server at " + client.getPort());
+        new Thread(() -> {
+            try {
+                String userInput;
+                while (true) {
+                    if (readMode) {
+                        userInput = bf.readLine();
+                        System.out.println(userInput);
+                        System.out.println(bf.readLine());
+                    }
+                }
+            } catch (IOException ioException) {
+                if (!exit) {
+                    ioException.printStackTrace();
+                    System.err.println("Server connection might have been dropped!");
+                }
+            }
+        }).start();
+    }
+
+    /**
      * Receives file name that will be later used to create and store a file.
      *
      * @return Returns String containing file name that will be used to store a file.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
+
     private String receiveName() throws IOException {
-        int port = 5001 + (clientID * 10);
+        int port = 50001 + (clientID * 10);
         Socket socket = new Socket(InetAddress.getByName("localhost"), port);
         BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         String name = reader.readLine();
@@ -201,8 +217,9 @@ public class Client {
      *
      * @param name String that will be used as file name to store it in download location.
      */
+
     private void receiveFile(String name) {
-        int port = 5000 + (clientID * 10);
+        int port = 50000 + (clientID * 10);
         String filePath = saveLocation + "\\" + name;
         if (!multiHostMode) {
             try {
@@ -253,8 +270,9 @@ public class Client {
      * @param filePath String containing path to the file that's name will be sent to the file server.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
+
     private void sendName(String filePath) throws IOException {
-        int port = 5001 + (clientID * 10);
+        int port = 50001 + (clientID * 10);
         ServerSocket nameSocket = new ServerSocket(port);
         Pattern pattern = Pattern.compile("[\\\\]{0}[\\w-.]*$");
         Matcher matcher = pattern.matcher(filePath);
@@ -275,10 +293,17 @@ public class Client {
      * @param filePath String containing path to the file that will be sent to the file server.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
+
     private void sendFile(String filePath) throws IOException {
-        int port = 5000 + (clientID * 10);
+        int port = 50000 + (clientID * 10);
         ServerSocket ssDL = new ServerSocket(port);
         Socket socket = ssDL.accept();
+        Pattern pattern = Pattern.compile("^[\\w]*.[\\w]*$");
+        Matcher matcher = pattern.matcher(filePath);
+        if (matcher.find()) {
+            String tmp = filePath;
+            filePath = saveLocation + "\\" + tmp;
+        }
         File file = new File(filePath);
         if (file.exists()) {
             FileInputStream fis = new FileInputStream(file);
